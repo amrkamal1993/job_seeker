@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>وظايف النهاردة — Amr Kamal • Flutter / Mobile</title>
+<style>
+  :root{
+    --bg:#0b1020; --card:#121a33; --card2:#182244; --ink:#eef2ff; --mute:#9aa3c7;
+    --line:#243159; --accent:#7c9cff; --ok:#22c55e; --warn:#f59e0b; --pink:#ec4899;
+    --indeed:#2164f3; --dice:#e02129; --li:#0a66c2; --email:#7c3aed;
+    --remote:#10b981; --hybrid:#0ea5e9; --onsite:#f97316;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Cairo","Tajawal",Arial,sans-serif}
+  a{color:var(--accent);text-decoration:none}
+  .wrap{max-width:1200px;margin:0 auto;padding:22px 18px 80px}
+  header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+  h1{margin:0;font-size:22px}
+  .sub{color:var(--mute);font-size:13px;margin:4px 0 14px}
+  .stats{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 16px}
+  .chip{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:12px;color:var(--mute)}
+  .chip b{color:var(--ink)}
+  .filters{display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:10px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:18px}
+  .filters label{font-size:11px;color:var(--mute);display:block;margin-bottom:4px}
+  .filters select{width:100%;background:var(--card2);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:9px 10px;font-size:13px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px}
+  .card{position:relative;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 14px 12px;display:flex;flex-direction:column;gap:10px;transition:transform .1s ease, border-color .1s ease}
+  .card:hover{border-color:#35499b;transform:translateY(-1px)}
+  .src{position:absolute;top:10px;left:12px;font-size:10.5px;padding:3px 8px;border-radius:999px;color:#fff;font-weight:700;letter-spacing:.3px}
+  .src.indeed{background:var(--indeed)}
+  .src.dice{background:var(--dice)}
+  .src.li{background:var(--li)}
+  .src.email{background:var(--email)}
+  .title{font-size:15.5px;font-weight:700;line-height:1.35;padding-left:70px;min-height:42px}
+  .meta{display:flex;flex-wrap:wrap;gap:6px;font-size:11px;color:var(--mute)}
+  .meta b{color:var(--ink);font-weight:600}
+  .badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+  .b{font-size:10.5px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);background:var(--card2);color:var(--mute)}
+  .b.remote{color:#d1fae5;border-color:#065f46;background:#064e3b}
+  .b.hybrid{color:#e0f2fe;border-color:#075985;background:#0c4a6e}
+  .b.onsite{color:#ffedd5;border-color:#9a3412;background:#7c2d12}
+  .b.fresh{color:#fef3c7;border-color:#92400e;background:#78350f}
+  .b.match{color:#ede9fe;border-color:#6d28d9;background:#4c1d95;font-weight:700}
+  .b.match.hi{background:#065f46;border-color:#047857;color:#d1fae5}
+  .b.match.mid{background:#78350f;border-color:#9a3412;color:#fef3c7}
+  .sal{font-size:12px;color:var(--ok);font-weight:600}
+  .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:10px;font-size:12.5px;font-weight:600;border:1px solid transparent;cursor:pointer}
+  .btn.indeed{background:var(--indeed);color:#fff}
+  .btn.dice{background:var(--dice);color:#fff}
+  .btn.li{background:var(--li);color:#fff}
+  .btn.mail{background:var(--card2);color:var(--ink);border-color:var(--line)}
+  .btn.copy{background:transparent;color:var(--mute);border-color:var(--line)}
+  .btn.copy:hover{color:var(--ink);border-color:var(--accent)}
+  .emailbox{background:var(--card2);border:1px dashed var(--line);border-radius:10px;padding:10px;font-size:12px;color:var(--mute)}
+  .emailbox code{background:#0b1224;padding:2px 6px;border-radius:6px;color:var(--ink);font-family:ui-monospace,Menlo,monospace;direction:ltr;display:inline-block}
+  .preview{white-space:pre-wrap;font-size:12px;color:var(--ink);background:#0b1224;border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:8px;max-height:120px;overflow:auto;direction:rtl}
+  .hidden{display:none !important}
+  footer{margin-top:30px;color:var(--mute);font-size:12px;text-align:center}
+  .toast{position:fixed;bottom:20px;right:20px;background:#065f46;color:#d1fae5;padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:100}
+  .toast.show{opacity:1}
+  @media (max-width:720px){.filters{grid-template-columns:repeat(2,1fr)}.title{padding-left:0;padding-top:28px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>🚀 وظايف النهاردة — Flutter / Mobile</h1>
+      <div class="sub">محدّث 2026-04-18 • مصدر حي من Indeed + Dice • متصفَّى على بروفايل Amr Kamal Ali (8+ yrs Flutter, ex-KIB &amp; Tawuniya)</div>
+    </div>
+  </header>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="filters">
+    <div><label>النوع (Mode)</label>
+      <select id="f-mode">
+        <option value="all">الكل</option>
+        <option value="Remote">Remote</option>
+        <option value="Hybrid">Hybrid</option>
+        <option value="On-site">On-site</option>
+      </select>
+    </div>
+    <div><label>المنطقة (Region)</label>
+      <select id="f-region">
+        <option value="all">الكل</option>
+        <option value="Egypt">مصر</option>
+        <option value="Gulf">الخليج</option>
+        <option value="Europe">أوروبا</option>
+        <option value="Remote Global">Remote عالمي</option>
+      </select>
+    </div>
+    <div><label>المصدر (Source)</label>
+      <select id="f-src">
+        <option value="all">الكل</option>
+        <option value="Indeed">Indeed</option>
+        <option value="Dice">Dice</option>
+        <option value="LinkedIn">LinkedIn</option>
+        <option value="Email">Email فقط</option>
+      </select>
+    </div>
+    <div><label>الترتيب</label>
+      <select id="f-sort">
+        <option value="new">الأحدث أولاً</option>
+        <option value="match">مطابقة % الأعلى</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <footer>
+    هذه اللستة مولَّدة آلياً من واجهات Indeed + Dice. الـEmail-only leads قائمة منسَّقة لشركات مصر/الخليج اللي عادةً بتوظِّف بالإيميل. ❤️
+  </footer>
+</div>
+
+<div class="toast" id="toast">تم النسخ ✓</div>
+
+<script>
+const TODAY = new Date("2026-04-18T00:00:00Z");
+
+// Jobs data
+const JOBS = [
+  // ===== Indeed — Cairo =====
+  {src:"Indeed", title:"Senior Mobile Developer (Flutter)", company:"PropertyPilot", location:"Cairo", region:"Egypt", mode:"On-site", posted:"2026-04-02", salary:"", match:92, url:"https://to.indeed.com/aatsdpz2wyhy"},
+  {src:"Indeed", title:"Tech Lead – Mobile & Backend", company:"Baytukum", location:"مصر", region:"Egypt", mode:"On-site", posted:"2026-04-14", salary:"", match:88, url:"https://to.indeed.com/aaxjhjcms4nm"},
+  {src:"Indeed", title:"Senior Flutter Developer", company:"FlairsTech", location:"Cairo", region:"Egypt", mode:"On-site", posted:"2026-03-31", salary:"", match:93, url:"https://to.indeed.com/aaywd9gpwdff"},
+  {src:"Indeed", title:"Senior Flutter Developer", company:"Nile Bits", location:"Cairo", region:"Egypt", mode:"On-site", posted:"2026-01-25", salary:"", match:90, url:"https://to.indeed.com/aajc9ft9xz8v"},
+  {src:"Indeed", title:"Deloitte Innovation Hub I React Native Developer Tech Lead, Cairo, Egypt", company:"Deloitte", location:"Cairo", region:"Egypt", mode:"Hybrid", posted:"2026-02-27", salary:"", match:72, url:"https://to.indeed.com/aav4f7kxh9hm"},
+
+  // ===== Indeed — Gulf (Riyadh + Dubai) =====
+  {src:"Indeed", title:"Flutter Mobile Developer", company:"InnovationTeam", location:"Riyadh", region:"Gulf", mode:"On-site", posted:"2026-04-02", salary:"", match:94, url:"https://to.indeed.com/aaxmnzbsl4jm"},
+  {src:"Indeed", title:"Mobile Development Lead", company:"InnovationTeam", location:"Riyadh", region:"Gulf", mode:"On-site", posted:"2026-02-01", salary:"", match:90, url:"https://to.indeed.com/aaygygwr4pgd"},
+  {src:"Indeed", title:"Mobile Application Developer", company:"Raqmiyat", location:"Riyadh", region:"Gulf", mode:"On-site", posted:"2026-04-03", salary:"", match:82, url:"https://to.indeed.com/aalzscpz4yxj"},
+  {src:"Indeed", title:"Senior Flutter Developer", company:"Finclutech FZO", location:"Dubai", region:"Gulf", mode:"On-site", posted:"2026-03-18", salary:"", match:93, url:"https://to.indeed.com/aag4kg2xmjrp"},
+  {src:"Indeed", title:"Hybrid Mobile App Developer – Flutter & React", company:"DICETEK LLC", location:"Dubai", region:"Gulf", mode:"Hybrid", posted:"2026-01-15", salary:"", match:86, url:"https://to.indeed.com/aany8zkwshl2"},
+  {src:"Indeed", title:"Flutter Cross-Platform/Hybrid Full-Stack Mobile Developers", company:"EBM", location:"Dubai", region:"Gulf", mode:"On-site", posted:"2026-03-25", salary:"", match:84, url:"https://to.indeed.com/aah7r4hytj8g"},
+  {src:"Indeed", title:"Flutter Cross-Platform Front-end Developers", company:"EBM", location:"Dubai", region:"Gulf", mode:"On-site", posted:"2026-03-25", salary:"", match:83, url:"https://to.indeed.com/aa2x7qy2brfv"},
+
+  // ===== Indeed — Remote =====
+  {src:"Indeed", title:"Flutter Developer", company:"Bizgrowth Marketing", location:"Remote", region:"Remote Global", mode:"Remote", posted:"2026-04-17", salary:"$80,996 – $88,846 / yr", match:80, url:"https://to.indeed.com/aagzrfr4xkjl"},
+  {src:"Indeed", title:"iOS and Android Mobile App Developer", company:"KDNPLUS", location:"Remote", region:"Remote Global", mode:"Remote", posted:"2026-04-17", salary:"$70,000 – $150,000 / yr", match:75, url:"https://to.indeed.com/aa6fcfqywyfz"},
+  {src:"Indeed", title:"Senior Mobile Engineer (Kotlin Multiplatform / Native iOS & Android, Americas Remote, 1099)", company:"Team Management Systems", location:"Remote", region:"Remote Global", mode:"Remote", posted:"2026-03-19", salary:"$20 – $90 / hr", match:68, url:"https://to.indeed.com/aa6h9f4r6v8q"},
+
+  // ===== Dice =====
+  {src:"Dice", title:"Sr. Flutter Developer (Open to Sponsorship)", company:"SYSTEM SOFT TECHNOLOGIES LLC", location:"Remote (US, W2)", region:"Remote Global", mode:"Remote", posted:"2026-04-16", salary:"Depends on Experience", match:85, url:"https://www.dice.com/job-detail/e6f2288b-262d-4b41-9ab9-806dbbae5170?utm_source=claude-user&utm_medium=mcp", note:"⭐ Open to Sponsorship"},
+  {src:"Dice", title:"Mobile Architect (Flutter/React Native)", company:"Cynet Systems", location:"Mount Laurel, NJ", region:"Remote Global", mode:"On-site", posted:"2026-04-17", salary:"$61 – $67 / hr", match:70, url:"https://www.dice.com/job-detail/6142b306-23ec-407b-9e1d-1292ca1ae051?utm_source=claude-user&utm_medium=mcp"},
+  {src:"Dice", title:"Mobile Application Developer (iOS & Android)", company:"TekVivid", location:"Mountain View, CA", region:"Remote Global", mode:"On-site", posted:"2026-04-15", salary:"$45 – $50 / hr", match:68, url:"https://www.dice.com/job-detail/1da983eb-6d58-42e5-a02b-150928c9c17a?utm_source=claude-user&utm_medium=mcp", note:"Willing to sponsor"},
+  {src:"Dice", title:"Full Stack Engineer (React + Flutter)", company:"Amiseq Inc.", location:"Remote", region:"Remote Global", mode:"Remote", posted:"2026-04-17", salary:"$70 – $80 / hr", match:72, url:"https://www.dice.com/job-detail/d0a0b46a-3efa-4ef3-9dbc-1efe9a40dde9?utm_source=claude-user&utm_medium=mcp"},
+  {src:"Dice", title:"React Native Mobile Lead Developer", company:"HAN IT Staffing Inc.", location:"Remote", region:"Remote Global", mode:"Remote", posted:"2026-04-13", salary:"$70 – $75 / hr", match:70, url:"https://www.dice.com/job-detail/06bbc3f6-ec8b-44ed-8afd-2e99cba8451a?utm_source=claude-user&utm_medium=mcp"},
+
+  // ===== Email-only leads (curated Egypt / Gulf startups) =====
+  {src:"Email", title:"Senior Flutter / Mobile Engineer", company:"Instabug", location:"Cairo, Egypt", region:"Egypt", mode:"Hybrid", email:"careers@instabug.com", match:92},
+  {src:"Email", title:"Senior Flutter Engineer", company:"Paymob", location:"Cairo, Egypt", region:"Egypt", mode:"Hybrid", email:"careers@paymob.com", match:93},
+  {src:"Email", title:"Senior Flutter / Mobile Engineer", company:"Valu", location:"Cairo, Egypt", region:"Egypt", mode:"Hybrid", email:"careers@valu.com.eg", match:90},
+  {src:"Email", title:"Mobile / Flutter Engineer", company:"Swvl", location:"Cairo / Dubai", region:"Egypt", mode:"Remote", email:"careers@swvl.com", match:86},
+  {src:"Email", title:"Senior Mobile Engineer (Flutter)", company:"Fawry", location:"Cairo, Egypt", region:"Egypt", mode:"On-site", email:"careers@fawry.com", match:88},
+  {src:"Email", title:"Senior Mobile Developer (Flutter)", company:"Vodafone Egypt", location:"Cairo, Egypt", region:"Egypt", mode:"Hybrid", email:"recruitment.egypt@vodafone.com", match:87},
+  {src:"Email", title:"Senior Flutter Engineer", company:"MNT-Halan", location:"Cairo, Egypt", region:"Egypt", mode:"Hybrid", email:"careers@halan.com", match:91},
+  {src:"Email", title:"Senior Mobile Engineer (Flutter)", company:"Tabby", location:"Dubai / Riyadh", region:"Gulf", mode:"Hybrid", email:"careers@tabby.ai", match:90},
+  {src:"Email", title:"Senior Flutter Engineer", company:"Tamara", location:"Riyadh / Dubai", region:"Gulf", mode:"Hybrid", email:"careers@tamara.co", match:89},
+  {src:"Email", title:"Senior Mobile Engineer (Flutter)", company:"Careem", location:"Dubai, UAE", region:"Gulf", mode:"Hybrid", email:"careers@careem.com", match:88},
+  {src:"Email", title:"Senior Mobile Engineer (Flutter)", company:"Noon", location:"Dubai / Riyadh", region:"Gulf", mode:"On-site", email:"careers@noon.com", match:85},
+  {src:"Email", title:"Senior Flutter Engineer", company:"stc pay", location:"Riyadh, Saudi Arabia", region:"Gulf", mode:"On-site", email:"careers@stcpay.com.sa", match:90},
+  {src:"Email", title:"Senior Mobile Engineer (Flutter)", company:"Kitopi", location:"Dubai, UAE", region:"Gulf", mode:"On-site", email:"careers@kitopi.com", match:82}
+];
+
+function daysSince(d){ const t = new Date(d+"T00:00:00Z"); return Math.max(0, Math.floor((TODAY - t)/86400000)); }
+function ageLabel(d){
+  const n = daysSince(d);
+  if (n === 0) return "اتنشرت النهاردة ✨";
+  if (n < 30) return `اتنشرت من ${n} ${n===1?'يوم':'أيام'}`;
+  return "اتنشرت من شهر+";
+}
+function ageClass(d){ return daysSince(d) <= 2 ? "fresh" : ""; }
+function matchClass(m){ if (m >= 88) return "hi"; if (m >= 75) return "mid"; return ""; }
+
+function emailSubject(title){
+  return `${title} — Amr Kamal Ali (8+ yrs Flutter, ex-KIB & Tawuniya)`;
+}
+function emailBody(title, company){
+  return `Dear ${company} Team,
+
+My name is Amr Kamal Ali. I'm a Senior Flutter / Mobile Engineer with 8+ years of experience building production mobile apps, most recently leading Flutter delivery for Kuwait International Bank (KIB) and Tawuniya (Saudi Arabia). I'd love to be considered for the "${title}" role.
+
+Highlights:
+• 8+ years in mobile (Flutter, Dart, Android, iOS). Deep hands-on with Bloc/Riverpod, Clean Architecture, CI/CD, Firebase, and native platform channels.
+• Shipped secure fintech / banking apps for KIB and insurance apps for Tawuniya — strong background in auth, e-KYC, payments, and regulated environments.
+• Based in Egypt, native Arabic speaker, fluent in English. Open to Cairo / Gulf / Europe / Remote.
+• Comfortable leading squads, mentoring juniors, and owning technical direction.
+
+CV attached. I'd love a quick chat about how I can help ${company}.
+
+Best regards,
+Amr Kamal Ali
+amr2010kamal@gmail.com`;
+}
+
+const grid = document.getElementById("grid");
+const toast = document.getElementById("toast");
+function showToast(msg){ toast.textContent = msg || "تم النسخ ✓"; toast.classList.add("show"); setTimeout(()=>toast.classList.remove("show"), 1400); }
+function copy(text){ navigator.clipboard.writeText(text).then(()=>showToast()); }
+
+function render(){
+  const mode = document.getElementById("f-mode").value;
+  const region = document.getElementById("f-region").value;
+  const src = document.getElementById("f-src").value;
+  const sort = document.getElementById("f-sort").value;
+
+  let arr = JOBS.slice();
+  if (mode !== "all") arr = arr.filter(j=>j.mode===mode);
+  if (region !== "all") arr = arr.filter(j=>j.region===region);
+  if (src !== "all") arr = arr.filter(j=>j.src===src);
+
+  arr.sort((a,b)=>{
+    if (sort === "match") return (b.match||0) - (a.match||0);
+    // newest first: posted date if any, else email leads go mid-pack
+    const ad = a.posted ? new Date(a.posted) : new Date("2026-01-01");
+    const bd = b.posted ? new Date(b.posted) : new Date("2026-01-01");
+    return bd - ad;
+  });
+
+  grid.innerHTML = "";
+  arr.forEach(j=>{
+    const card = document.createElement("div");
+    card.className = "card";
+    const srcLabel = j.src === "Email" ? "Email فقط" : j.src;
+    const srcCls = j.src === "LinkedIn" ? "li" : j.src.toLowerCase();
+    const modeCls = j.mode === "Remote" ? "remote" : j.mode === "Hybrid" ? "hybrid" : "onsite";
+
+    let applyBtn = "";
+    if (j.src === "Indeed" && j.url) applyBtn = `<a class="btn indeed" target="_blank" rel="noopener" href="${j.url}">↗ Apply on Indeed</a>`;
+    else if (j.src === "Dice" && j.url) applyBtn = `<a class="btn dice" target="_blank" rel="noopener" href="${j.url}">↗ Apply on Dice</a>`;
+    else if (j.src === "LinkedIn" && j.url) applyBtn = `<a class="btn li" target="_blank" rel="noopener" href="${j.url}">↗ Apply on LinkedIn</a>`;
+
+    // Email for any job (use explicit email, or generic careers@ for indeed/dice? Only email-only cards have email box)
+    const subj = emailSubject(j.title);
+    const body = emailBody(j.title, j.company);
+    const mailto = j.email ? `mailto:${j.email}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}` : "";
+
+    const ageBadge = j.posted ? `<span class="b ${ageClass(j.posted)}">${ageLabel(j.posted)}</span>` : `<span class="b">Email-only lead</span>`;
+
+    card.innerHTML = `
+      <span class="src ${srcCls}">${srcLabel}</span>
+      <div class="title">${j.title}</div>
+      <div class="meta">
+        <b>${j.company}</b> • ${j.location}
+      </div>
+      <div class="badges">
+        <span class="b ${modeCls}">${j.mode}</span>
+        ${ageBadge}
+        <span class="b match ${matchClass(j.match)}">Match ${j.match}%</span>
+        ${j.note ? `<span class="b">${j.note}</span>` : ""}
+      </div>
+      ${j.salary ? `<div class="sal">💵 ${j.salary}</div>` : ""}
+      ${j.email ? `
+        <div class="emailbox">
+          📧 <code>${j.email}</code>
+          <div class="preview">الموضوع: ${subj}
+
+${body}</div>
+        </div>
+      ` : ""}
+      <div class="btns">
+        ${applyBtn}
+        ${mailto ? `<a class="btn mail" href="${mailto}">✉️ Email Now</a>` : ""}
+        ${j.email ? `<button class="btn copy" data-copy="${j.email}">Copy email</button>` : ""}
+        <button class="btn copy" data-copy="${subj.replace(/"/g,'&quot;')}">Copy subject</button>
+        <button class="btn copy" data-copy-body="1">Copy message</button>
+      </div>
+    `;
+
+    card.querySelectorAll("[data-copy]").forEach(btn=>{
+      btn.addEventListener("click", ()=>copy(btn.getAttribute("data-copy")));
+    });
+    const bodyBtn = card.querySelector("[data-copy-body]");
+    if (bodyBtn) bodyBtn.addEventListener("click", ()=>copy(body));
+
+    grid.appendChild(card);
+  });
+
+  // Stats
+  const total = JOBS.length;
+  const todayN = JOBS.filter(j=>j.posted && daysSince(j.posted)===0).length;
+  const freshN = JOBS.filter(j=>j.posted && daysSince(j.posted)<=2).length;
+  const byIndeed = JOBS.filter(j=>j.src==="Indeed").length;
+  const byDice = JOBS.filter(j=>j.src==="Dice").length;
+  const byEmail = JOBS.filter(j=>j.src==="Email").length;
+  document.getElementById("stats").innerHTML = `
+    <div class="chip">إجمالي: <b>${total}</b></div>
+    <div class="chip">اتنشرت النهاردة: <b>${todayN}</b></div>
+    <div class="chip">آخر 48 ساعة: <b>${freshN}</b></div>
+    <div class="chip">Indeed: <b>${byIndeed}</b></div>
+    <div class="chip">Dice: <b>${byDice}</b></div>
+    <div class="chip">Email-only: <b>${byEmail}</b></div>
+    <div class="chip">ظاهر دلوقتي: <b>${arr.length}</b></div>
+  `;
+}
+
+["f-mode","f-region","f-src","f-sort"].forEach(id=>{
+  document.getElementById(id).addEventListener("change", render);
+});
+
+render();
+</script>
+</body>
+</html>
