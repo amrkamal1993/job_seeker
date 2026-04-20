@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>🔒 Dashboard — Amr Kamal</title>
+<style>
+  :root{--bg:#0b1020;--card:#121a33;--ink:#eef2ff;--mute:#9aa3c7;--line:#243159;--accent:#7c9cff;--err:#ef4444;--ok:#22c55e}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Cairo",Arial,sans-serif}
+  .wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:20px}
+  .box{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:28px 26px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+  h1{margin:0 0 6px;font-size:20px}
+  p{margin:0 0 18px;color:var(--mute);font-size:13.5px;line-height:1.6}
+  label{display:block;font-size:12px;color:var(--mute);margin:14px 0 6px}
+  input[type=password]{width:100%;padding:12px 14px;background:#0b1224;border:1px solid var(--line);border-radius:12px;color:var(--ink);font-size:15px;direction:ltr}
+  input[type=password]:focus{border-color:var(--accent);outline:none}
+  .row{display:flex;align-items:center;gap:8px;margin:14px 0 0;font-size:12.5px;color:var(--mute)}
+  button{width:100%;margin-top:18px;padding:12px;background:var(--accent);color:#0b1020;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer}
+  button:hover{filter:brightness(1.08)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .msg{margin-top:12px;font-size:12.5px;min-height:18px}
+  .msg.err{color:var(--err)}
+  .msg.ok{color:var(--ok)}
+  .meta{margin-top:16px;font-size:11px;color:var(--mute);text-align:center;opacity:.8}
+  .lock{font-size:42px;margin-bottom:6px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <form class="box" id="form" autocomplete="off">
+    <div class="lock">🔒</div>
+    <h1>Flutter Jobs Dashboard</h1>
+    <p>الصفحة دي مقفولة بـAES-256. ادخل الباسوورد عشان تشوف الوظائف.</p>
+    <label for="pw">Password</label>
+    <input type="password" id="pw" autofocus required>
+    <div class="row">
+      <input type="checkbox" id="remember" checked>
+      <label for="remember" style="margin:0;color:var(--mute)">افتكرني 7 أيام على المتصفح ده</label>
+    </div>
+    <button id="go" type="submit">🔓 Unlock</button>
+    <div id="msg" class="msg"></div>
+    <div class="meta">AES-256-GCM • PBKDF2-SHA256 × 600,000</div>
+  </form>
+</div>
+
+<script id="payload" type="application/json">__PAYLOAD__</script>
+<script>
+(function(){
+  const LS_PW = "fljd_pw_v1";
+  const LS_EXP = "fljd_pw_exp";
+  const LS_ATT = "fljd_attempts";
+  const LS_LOCK = "fljd_lockUntil";
+  const MAX_ATTEMPTS = 5;
+  const LOCK_MS = 60*60*1000; // 1 hour
+  const REMEMBER_MS = 7*24*60*60*1000;
+
+  const payload = JSON.parse(document.getElementById("payload").textContent);
+  const form = document.getElementById("form");
+  const pwIn = document.getElementById("pw");
+  const remIn = document.getElementById("remember");
+  const msg = document.getElementById("msg");
+  const btn = document.getElementById("go");
+
+  function b64d(s){ return Uint8Array.from(atob(s), c=>c.charCodeAt(0)); }
+  function setMsg(t, cls){ msg.textContent = t; msg.className = "msg "+(cls||""); }
+
+  async function deriveKey(password, salt, iter){
+    const enc = new TextEncoder();
+    const baseKey = await crypto.subtle.importKey("raw", enc.encode(password), {name:"PBKDF2"}, false, ["deriveKey"]);
+    return crypto.subtle.deriveKey(
+      {name:"PBKDF2", salt: salt, iterations: iter, hash:"SHA-256"},
+      baseKey,
+      {name:"AES-GCM", length:256},
+      false,
+      ["decrypt"]
+    );
+  }
+
+  async function tryDecrypt(password){
+    const salt = b64d(payload.salt), iv = b64d(payload.iv), ct = b64d(payload.ct);
+    const key = await deriveKey(password, salt, payload.iter);
+    const pt = await crypto.subtle.decrypt({name:"AES-GCM", iv: iv}, key, ct);
+    return new TextDecoder().decode(pt);
+  }
+
+  function checkLock(){
+    const lockUntil = parseInt(localStorage.getItem(LS_LOCK)||"0",10);
+    if (lockUntil > Date.now()){
+      const mins = Math.ceil((lockUntil - Date.now())/60000);
+      setMsg(`🚫 مقفول مؤقتاً. حاول تاني بعد ${mins} دقيقة.`, "err");
+      btn.disabled = true; pwIn.disabled = true;
+      return true;
+    }
+    return false;
+  }
+
+  async function renderPlain(html){
+    // Replace the whole document with the decrypted HTML
+    document.open();
+    document.write(html);
+    document.close();
+  }
+
+  async function autoUnlock(){
+    const exp = parseInt(localStorage.getItem(LS_EXP)||"0",10);
+    const saved = localStorage.getItem(LS_PW);
+    if (!saved || exp < Date.now()){
+      localStorage.removeItem(LS_PW); localStorage.removeItem(LS_EXP);
+      return false;
+    }
+    try {
+      const html = await tryDecrypt(saved);
+      await renderPlain(html);
+      return true;
+    } catch(e){
+      // Key no longer valid (e.g. password was changed in a new deploy). Clear.
+      localStorage.removeItem(LS_PW); localStorage.removeItem(LS_EXP);
+      return false;
+    }
+  }
+
+  form.addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    if (checkLock()) return;
+    setMsg("جاري فك التشفير…");
+    btn.disabled = true;
+    const pw = pwIn.value;
+    try {
+      const html = await tryDecrypt(pw);
+      // Success
+      localStorage.setItem(LS_ATT, "0");
+      if (remIn.checked){
+        localStorage.setItem(LS_PW, pw);
+        localStorage.setItem(LS_EXP, String(Date.now()+REMEMBER_MS));
+      } else {
+        localStorage.removeItem(LS_PW); localStorage.removeItem(LS_EXP);
+      }
+      setMsg("✅ تمام…", "ok");
+      setTimeout(()=>renderPlain(html), 150);
+    } catch(err){
+      const attempts = (parseInt(localStorage.getItem(LS_ATT)||"0",10))+1;
+      localStorage.setItem(LS_ATT, String(attempts));
+      if (attempts >= MAX_ATTEMPTS){
+        localStorage.setItem(LS_LOCK, String(Date.now()+LOCK_MS));
+        localStorage.setItem(LS_ATT, "0");
+        checkLock();
+      } else {
+        setMsg(`❌ باسوورد غلط. ${MAX_ATTEMPTS-attempts} محاولات متبقية.`, "err");
+        btn.disabled = false;
+        pwIn.select();
+      }
+    }
+  });
+
+  // Try auto-unlock on load
+  checkLock();
+  autoUnlock();
+})();
+</script>
+</body>
+</html>
