@@ -3,7 +3,8 @@
 Daily refresh for Amr Kamal's Flutter/Mobile jobs dashboard.
 
 Sources (all free, no LLM required):
-  - Adzuna API (DE + US + GB)  — requires ADZUNA_APP_ID + ADZUNA_APP_KEY
+  - JSearch API (LinkedIn + Indeed + Glassdoor) — requires JSEARCH_API_KEY
+      Free tier: 200 req/month  |  ~4 req/day × 30 days = 120/month → $0
   - Remotive API (remote jobs) — public, no key
   - Arbeitnow API (EU + DE)    — public, no key
   - 13 hardcoded Email-only MENA leads (always included)
@@ -33,8 +34,7 @@ OUTPUT_PATH   = os.path.join(REPO_ROOT, "index.html")
 
 PBKDF2_ITERS = 600_000
 PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "@mr2026")
-ADZUNA_APP_ID  = os.environ.get("ADZUNA_APP_ID", "").strip()
-ADZUNA_APP_KEY = os.environ.get("ADZUNA_APP_KEY", "").strip()
+JSEARCH_API_KEY = os.environ.get("JSEARCH_API_KEY", "ak_hnuq0efjtde78je2ik1bhjjkfa0982xlgomtvzc53nh97b1").strip()
 
 TODAY = date.today()
 HTTP_TIMEOUT = 20
@@ -104,45 +104,80 @@ def match_score(title, summary=""):
     return min(93, max(70, score))
 
 
-# ---------- Source: Adzuna ----------
-def fetch_adzuna(country, what="flutter", where=None, results=20, max_days=14):
-    if not (ADZUNA_APP_ID and ADZUNA_APP_KEY):
+# ---------- Source: JSearch (LinkedIn + Indeed + Glassdoor) ----------
+# Free tier: 200 req/month — 4 queries/day × 30 days = 120/month → $0 cost
+def fetch_jsearch(query, date_posted="month", remote_only=False, num_results=10):
+    """Fetch jobs from JSearch API (aggregates LinkedIn, Indeed, Glassdoor)."""
+    if not JSEARCH_API_KEY:
+        print("[jsearch] No API key — skipping.", file=sys.stderr)
         return []
     params = {
-        "app_id": ADZUNA_APP_ID, "app_key": ADZUNA_APP_KEY,
-        "what": what, "results_per_page": results,
-        "max_days_old": max_days, "sort_by": "date",
-        "content-type": "application/json",
+        "query": query,
+        "page": "1",
+        "num_pages": "1",
+        "date_posted": date_posted,
     }
-    if where:
-        params["where"] = where
-    url = f"https://api.adzuna.com/v1/api/jobs/{country}/search/1?" + parse.urlencode(params)
+    if remote_only:
+        params["remote_jobs_only"] = "true"
+    url = "https://jsearch.p.rapidapi.com/search?" + parse.urlencode(params)
+    req = request.Request(
+        url,
+        headers={
+            "X-RapidAPI-Key": JSEARCH_API_KEY,
+            "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
+            "User-Agent": USER_AGENT,
+        }
+    )
     try:
-        data = http_get_json(url)
+        with request.urlopen(req, timeout=HTTP_TIMEOUT) as r:
+            data = json.loads(r.read().decode("utf-8"))
     except Exception as e:
-        print(f"[adzuna {country}] {e}", file=sys.stderr)
+        print(f"[jsearch '{query}'] {e}", file=sys.stderr)
         return []
     out = []
-    for j in data.get("results", []):
-        title = j.get("title", "").strip()
-        summary = j.get("description", "")
-        if not KEYWORD_RE.search(title + " " + summary):
+    for j in (data.get("data") or [])[:num_results]:
+        title = (j.get("job_title") or "").strip()
+        desc  = j.get("job_description") or ""
+        if not KEYWORD_RE.search(title + " " + desc):
             continue
-        posted = parse_iso_date(j.get("created"))
+        posted = parse_iso_date(j.get("job_posted_at_datetime_utc"))
         if posted is None or (TODAY - posted).days > 30:
             continue
-        loc = j.get("location", {}).get("display_name") or country.upper()
-        mode = "Remote" if "remote" in (loc + " " + title).lower() else "On-site"
-        salary_min, salary_max = j.get("salary_min"), j.get("salary_max")
-        salary = None
-        if salary_min and salary_max:
-            salary = f"{int(salary_min):,}–{int(salary_max):,} {j.get('salary_is_predicted','').upper() or ''} /yr".strip()
+        # Build location string
+        city    = j.get("job_city") or ""
+        country = j.get("job_country") or ""
+        loc = ", ".join(filter(None, [city, country])) or "Remote"
+        is_remote = j.get("job_is_remote") or "remote" in (title + " " + loc).lower()
+        mode = "Remote" if is_remote else "On-site"
+        # Determine region tag from country code
+        region_map = {"US": "US", "GB": "GB", "DE": "DE", "IN": "IN"}
+        region = region_map.get((j.get("job_country") or "").upper(), "Global")
+        if is_remote:
+            region = "Remote"
+        # Salary
+        sal_min = j.get("job_min_salary")
+        sal_max = j.get("job_max_salary")
+        cur     = j.get("job_salary_currency") or ""
+        salary  = None
+        if sal_min and sal_max:
+            salary = f"{int(sal_min):,}–{int(sal_max):,} {cur}/yr".strip()
+        # Source badge — prefer employer_logo source hint, fall back to "jsearch"
+        src_hint = (j.get("job_publisher") or "jsearch").lower()
+        if "linkedin" in src_hint:
+            src = "linkedin"
+        elif "indeed" in src_hint:
+            src = "indeed"
+        else:
+            src = "jsearch"
         out.append({
-            "src": "adzuna", "title": title,
-            "company": (j.get("company") or {}).get("display_name", "—"),
-            "loc": loc, "region": country.upper(), "mode": mode,
-            "posted": posted.isoformat(), "match": match_score(title, summary),
-            "salary": salary, "apply": j.get("redirect_url"),
+            "src": src,
+            "title": title,
+            "company": j.get("employer_name") or "—",
+            "loc": loc, "region": region, "mode": mode,
+            "posted": posted.isoformat(),
+            "match": match_score(title, desc),
+            "salary": salary,
+            "apply": j.get("job_apply_link"),
         })
     return out
 
@@ -222,16 +257,16 @@ def dedupe(cards):
 
 def gather_jobs():
     jobs = []
-    # Adzuna — DE, US, GB
-    jobs += fetch_adzuna("de", what="flutter", where="Berlin", max_days=14)
-    jobs += fetch_adzuna("de", what="flutter developer", max_days=14)
-    jobs += fetch_adzuna("us", what="flutter developer", where="remote", max_days=10)
-    jobs += fetch_adzuna("gb", what="flutter developer", max_days=14)
-    jobs += fetch_adzuna("in", what="senior flutter", max_days=10)
-    # Remotive
+    # ── JSearch (LinkedIn + Indeed + Glassdoor) ─────────────────────────
+    # 4 queries/day × 30 days = 120 req/month  →  within free 200/month limit
+    jobs += fetch_jsearch("flutter developer",        date_posted="week")
+    jobs += fetch_jsearch("flutter developer remote", date_posted="week",  remote_only=True)
+    jobs += fetch_jsearch("flutter mobile developer", date_posted="month")
+    jobs += fetch_jsearch("senior flutter engineer",  date_posted="month")
+    # ── Remotive (free, no key) ──────────────────────────────────────────
     jobs += fetch_remotive("flutter")
     jobs += fetch_remotive("mobile developer")
-    # Arbeitnow
+    # ── Arbeitnow (free, EU/DE focused) ─────────────────────────────────
     jobs += fetch_arbeitnow()
     jobs = dedupe(jobs)
     # Cap to 40 live jobs, sorted freshest first
@@ -275,7 +310,7 @@ def build_plaintext_html(live_jobs):
   :root{
     --bg:#0b1020;--card:#121a33;--card2:#0e1530;--ink:#eef2ff;--mute:#9aa3c7;--line:#243159;
     --accent:#7c9cff;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;
-    --adzuna:#2164f3;--remotive:#16a34a;--arbeitnow:#e11d48;--linkedin:#0a66c2;--email:#7c3aed;
+    --jsearch:#f59e0b;--linkedin:#0a66c2;--indeed:#2557a7;--remotive:#16a34a;--arbeitnow:#e11d48;--email:#7c3aed;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Cairo",Arial,sans-serif;line-height:1.5}
@@ -292,7 +327,9 @@ def build_plaintext_html(live_jobs):
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
   .job{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;position:relative;display:flex;flex-direction:column;gap:8px}
   .job .src{position:absolute;top:12px;left:12px;padding:3px 8px;font-size:11px;border-radius:999px;font-weight:700;color:#fff}
-  .src.adzuna{background:var(--adzuna)}
+  .src.jsearch{background:var(--jsearch)}
+  .src.linkedin{background:var(--linkedin)}
+  .src.indeed{background:var(--indeed)}
   .src.remotive{background:var(--remotive)}
   .src.arbeitnow{background:var(--arbeitnow)}
   .src.email{background:var(--email)}
@@ -327,7 +364,9 @@ def build_plaintext_html(live_jobs):
       <span class="chip">إجمالي: <b>""" + str(total) + r"""</b></span>
       <span class="chip">النهاردة: <b>""" + str(today_n) + r"""</b></span>
       <span class="chip">آخر 48 ساعة: <b>""" + str(fresh48) + r"""</b></span>
-      <span class="chip">Adzuna: <b>""" + str(src_counts.get("adzuna", 0)) + r"""</b></span>
+      <span class="chip">LinkedIn: <b>""" + str(src_counts.get("linkedin", 0)) + r"""</b></span>
+      <span class="chip">Indeed: <b>""" + str(src_counts.get("indeed", 0)) + r"""</b></span>
+      <span class="chip">JSearch: <b>""" + str(src_counts.get("jsearch", 0)) + r"""</b></span>
       <span class="chip">Remotive: <b>""" + str(src_counts.get("remotive", 0)) + r"""</b></span>
       <span class="chip">Arbeitnow: <b>""" + str(src_counts.get("arbeitnow", 0)) + r"""</b></span>
       <span class="chip">Email: <b>""" + str(src_counts.get("email", 0)) + r"""</b></span>
@@ -341,7 +380,7 @@ def build_plaintext_html(live_jobs):
         <select id="fRegion"><option value="">الكل</option><option>DE</option><option>US</option><option>GB</option><option>IN</option><option>Remote</option><option>Email</option></select>
       </label>
       <label>Source
-        <select id="fSrc"><option value="">الكل</option><option>adzuna</option><option>remotive</option><option>arbeitnow</option><option>email</option></select>
+        <select id="fSrc"><option value="">الكل</option><option>linkedin</option><option>indeed</option><option>jsearch</option><option>remotive</option><option>arbeitnow</option><option>email</option></select>
       </label>
       <label>Sort
         <select id="fSort"><option value="newest">Newest</option><option value="match">Match %</option></select>
@@ -362,10 +401,10 @@ def build_plaintext_html(live_jobs):
     const fSrc = document.getElementById("fSrc");
     const fSort = document.getElementById("fSort");
     const esc = s=>(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-    const srcLabel = s => ({adzuna:"Adzuna",remotive:"Remotive",arbeitnow:"Arbeitnow",email:"Email فقط"}[s]||s);
+    const srcLabel = s => ({linkedin:"LinkedIn",indeed:"Indeed",jsearch:"JSearch",remotive:"Remotive",arbeitnow:"Arbeitnow",email:"Email فقط"}[s]||s);
     const applyBtn = j=>{
       if (!j.apply) return "";
-      const cls = ["adzuna","remotive","arbeitnow"].includes(j.src) ? j.src : "ghost";
+      const cls = ["linkedin","indeed","jsearch","remotive","arbeitnow"].includes(j.src) ? j.src : "ghost";
       return `<a class="btn ${cls}" target="_blank" rel="noopener" href="${esc(j.apply)}">↗ Apply on ${srcLabel(j.src)}</a>`;
     };
     const emailBlock = j=>{
@@ -445,7 +484,7 @@ def encrypt_and_package(plaintext_html):
 
 # ---------- Main ----------
 def main():
-    print(f"→ daily_refresh  date={TODAY}  password_env_set={bool(PASSWORD)}  adzuna_set={bool(ADZUNA_APP_ID)}")
+    print(f"→ daily_refresh  date={TODAY}  password_env_set={bool(PASSWORD)}  jsearch_set={bool(JSEARCH_API_KEY)}")
     live = gather_jobs()
     print(f"→ live jobs collected: {len(live)}")
     if not live and not EMAIL_LEADS:
