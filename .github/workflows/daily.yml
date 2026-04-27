@@ -60,7 +60,9 @@ jobs:
             echo "No changes — nothing to commit."
           else
             git commit -m "Daily encrypted refresh: $(date -u +%Y-%m-%d)"
-            git fetch origin main
-            git rebase origin/main
-            git push
+            for i in 1 2 3; do
+              git pull --rebase origin main && git push && break
+              echo "Push attempt $i failed, retrying in 5s..."
+              sleep 5
+            done
           fi
