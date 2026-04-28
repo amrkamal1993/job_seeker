@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: daily-refresh
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   refresh:
@@ -53,16 +53,19 @@ jobs:
 
       - name: Commit & push if changed
         run: |
+          set -euo pipefail
           git config user.email "amr2010kamal@gmail.com"
           git config user.name  "github-actions[bot]"
+
           git add index.html
           if git diff --cached --quiet; then
             echo "No changes — nothing to commit."
-          else
-            git commit -m "Daily encrypted refresh: $(date -u +%Y-%m-%d)"
-            for i in 1 2 3; do
-              git pull --rebase origin main && git push && break
-              echo "Push attempt $i failed, retrying in 5s..."
-              sleep 5
-            done
+            exit 0
           fi
+
+          git commit -m "Daily encrypted refresh: $(date -u +%Y-%m-%d)"
+
+          # Bring runner up-to-date with remote main, then push
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
