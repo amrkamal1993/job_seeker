@@ -4,10 +4,11 @@ Daily refresh for Amr Kamal's Flutter/Mobile jobs dashboard.
 
 Sources (all free, no LLM required):
   - JSearch API (LinkedIn + Indeed + Glassdoor) — requires JSEARCH_API_KEY
-      Free tier: 200 req/month  |  ~4 req/day × 30 days = 120/month → $0
+      Free tier: 200 req/month. Keep queries focused to avoid quota waste.
   - Remotive API (remote jobs) — public, no key
   - Arbeitnow API (EU + DE)    — public, no key
-  - 13 hardcoded Email-only MENA leads (always included)
+  - Gulf job-board search cards (LinkedIn/Bayt/NaukriGulf/GulfTalent) — safe links, no scraping
+  - Hardcoded Email-only MENA/Gulf leads (always included)
 
 Output:
   - index.html (encrypted with AES-256-GCM + PBKDF2-SHA256 x600,000, password from DASHBOARD_PASSWORD env)
@@ -15,7 +16,7 @@ Output:
 Run:  python3 scripts/daily_refresh.py
 Triggered by: .github/workflows/daily.yml (daily cron, 07:00 UTC = 09:00 Cairo)
 """
-import base64, html, json, os, re, secrets, sys
+import base64, html, json, os, re, secrets, ssl, sys
 from datetime import datetime, date, timezone
 from urllib import request, parse, error
 
@@ -34,14 +35,99 @@ OUTPUT_PATH   = os.path.join(REPO_ROOT, "index.html")
 
 PBKDF2_ITERS = 600_000
 PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "@mr2026")
-JSEARCH_API_KEY = os.environ.get("JSEARCH_API_KEY", "ak_hnuq0efjtde78je2ik1bhjjkfa0982xlgomtvzc53nh97b1").strip()
+JSEARCH_API_KEY = os.environ.get("JSEARCH_API_KEY", "").strip()
 
 TODAY = date.today()
 HTTP_TIMEOUT = 20
 USER_AGENT = "AmrKamal-JobsDashboard/1.0 (+https://amrkamal1993.github.io/job_seeker/)"
 
-# Flutter / mobile keyword filter (case-insensitive match against title+summary)
-KEYWORD_RE = re.compile(r"\b(flutter|dart|mobile|android|ios|react\s*native|kotlin multiplatform|kmp)\b", re.I)
+try:
+    import certifi
+    SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+except ImportError:
+    SSL_CONTEXT = ssl.create_default_context()
+
+# Flutter / mobile keyword filter (case-insensitive match against title+summary).
+# Tuned to Amr's CV: senior Flutter/mobile, clean architecture, BLoC, Firebase, CI/CD.
+KEYWORD_RE = re.compile(
+    r"\b(flutter|dart|mobile|android|ios|react\s*native|kotlin multiplatform|kmp|bloc|firebase)\b",
+    re.I,
+)
+
+PROFILE_BOOST_TERMS = {
+    "flutter": 15, "dart": 12, "mobile": 3, "senior": 3, "lead": 3,
+    "clean architecture": 3, "bloc": 2, "firebase": 2, "ci/cd": 2,
+    "android": 1, "ios": 1,
+}
+
+GULF_COUNTRY_CODES = {"AE", "SA", "QA", "KW", "BH", "OM"}
+GULF_COUNTRY_NAMES = {
+    "united arab emirates", "uae", "dubai", "abu dhabi", "sharjah",
+    "saudi arabia", "ksa", "riyadh", "jeddah", "khobar", "dammam",
+    "qatar", "doha", "kuwait", "bahrain", "oman", "muscat",
+}
+
+GULF_JSEARCH_QUERIES = [
+    "senior flutter developer Dubai",
+    "flutter developer UAE",
+    "senior flutter engineer Riyadh",
+    "flutter developer Saudi Arabia",
+    "flutter mobile developer Qatar",
+    "flutter developer Kuwait Bahrain Oman",
+]
+
+DIRECT_SEARCH_SOURCES = [
+    {
+        "src": "linkedin_search",
+        "title": "LinkedIn Jobs: Senior Flutter Gulf",
+        "company": "LinkedIn Jobs",
+        "loc": "Dubai / Riyadh / Doha / Kuwait / Bahrain / Oman",
+        "region": "Gulf",
+        "mode": "Search",
+        "match": 94,
+        "apply": "https://www.linkedin.com/jobs/search/?keywords=Senior%20Flutter%20Developer&location=Gulf%20Cooperation%20Council&f_TPR=r604800&sortBy=DD",
+    },
+    {
+        "src": "linkedin_search",
+        "title": "LinkedIn Content Search: Flutter hiring posts",
+        "company": "LinkedIn Feed",
+        "loc": "Gulf + Remote",
+        "region": "Gulf",
+        "mode": "Search",
+        "match": 91,
+        "apply": "https://www.linkedin.com/search/results/content/?keywords=%28Flutter%20OR%20Dart%29%20%28hiring%20OR%20vacancy%20OR%20job%29%20%28Dubai%20OR%20Riyadh%20OR%20Qatar%20OR%20Kuwait%20OR%20Bahrain%20OR%20Oman%29&sortBy=%22date_posted%22",
+    },
+    {
+        "src": "bayt",
+        "title": "Bayt: Flutter / Mobile Gulf search",
+        "company": "Bayt",
+        "loc": "GCC",
+        "region": "Gulf",
+        "mode": "Search",
+        "match": 88,
+        "apply": "https://www.bayt.com/en/international/jobs/flutter-developer-jobs/",
+    },
+    {
+        "src": "naukrigulf",
+        "title": "NaukriGulf: Flutter Developer Gulf search",
+        "company": "NaukriGulf",
+        "loc": "GCC",
+        "region": "Gulf",
+        "mode": "Search",
+        "match": 88,
+        "apply": "https://www.naukrigulf.com/flutter-developer-jobs",
+    },
+    {
+        "src": "gulftalent",
+        "title": "GulfTalent: Mobile / Flutter Gulf search",
+        "company": "GulfTalent",
+        "loc": "GCC",
+        "region": "Gulf",
+        "mode": "Search",
+        "match": 86,
+        "apply": "https://www.gulftalent.com/mobile-developer-jobs",
+    },
+]
 
 # ---------- Hardcoded email-only MENA leads ----------
 EMAIL_LEADS = [
@@ -63,7 +149,7 @@ EMAIL_LEADS = [
 
 def http_get_json(url, headers=None):
     req = request.Request(url, headers={**(headers or {}), "User-Agent": USER_AGENT, "Accept": "application/json"})
-    with request.urlopen(req, timeout=HTTP_TIMEOUT) as r:
+    with request.urlopen(req, timeout=HTTP_TIMEOUT, context=SSL_CONTEXT) as r:
         return json.loads(r.read().decode("utf-8"))
 
 
@@ -93,20 +179,26 @@ def age_for(posted_date):
 
 
 def match_score(title, summary=""):
-    """Rough heuristic: boost for flutter/dart > mobile > android/ios > rn. Caps at 93."""
+    """CV-oriented heuristic: boost Flutter/Dart senior mobile work. Caps at 95."""
     t = (title + " " + (summary or "")).lower()
     score = 75
-    if "flutter" in t or "dart" in t: score += 15
-    if "senior" in t or "lead" in t or "staff" in t or "principal" in t: score += 3
-    if "mobile" in t: score += 2
-    if "android" in t or " ios" in t: score += 1
+    for term, boost in PROFILE_BOOST_TERMS.items():
+        if term in t:
+            score += boost
+    if "staff" in t or "principal" in t: score += 2
     if "react native" in t: score -= 2
-    return min(93, max(70, score))
+    return min(95, max(70, score))
+
+
+def is_gulf_location(country_code="", location_text=""):
+    code = (country_code or "").upper()
+    text = (location_text or "").lower()
+    return code in GULF_COUNTRY_CODES or any(name in text for name in GULF_COUNTRY_NAMES)
 
 
 # ---------- Source: JSearch (LinkedIn + Indeed + Glassdoor) ----------
 # Free tier: 200 req/month — 4 queries/day × 30 days = 120/month → $0 cost
-def fetch_jsearch(query, date_posted="month", remote_only=False, num_results=10):
+def fetch_jsearch(query, date_posted="month", remote_only=False, num_results=10, region_override=None):
     """Fetch jobs from JSearch API (aggregates LinkedIn, Indeed, Glassdoor)."""
     if not JSEARCH_API_KEY:
         print("[jsearch] No API key — skipping.", file=sys.stderr)
@@ -129,7 +221,7 @@ def fetch_jsearch(query, date_posted="month", remote_only=False, num_results=10)
         }
     )
     try:
-        with request.urlopen(req, timeout=HTTP_TIMEOUT) as r:
+        with request.urlopen(req, timeout=HTTP_TIMEOUT, context=SSL_CONTEXT) as r:
             data = json.loads(r.read().decode("utf-8"))
     except Exception as e:
         print(f"[jsearch '{query}'] {e}", file=sys.stderr)
@@ -150,8 +242,13 @@ def fetch_jsearch(query, date_posted="month", remote_only=False, num_results=10)
         is_remote = j.get("job_is_remote") or "remote" in (title + " " + loc).lower()
         mode = "Remote" if is_remote else "On-site"
         # Determine region tag from country code
+        country_code = (j.get("job_country") or "").upper()
         region_map = {"US": "US", "GB": "GB", "DE": "DE", "IN": "IN"}
-        region = region_map.get((j.get("job_country") or "").upper(), "Global")
+        region = region_map.get(country_code, "Global")
+        if region_override:
+            region = region_override
+        elif is_gulf_location(country_code, loc + " " + query):
+            region = "Gulf"
         if is_remote:
             region = "Remote"
         # Salary
@@ -243,6 +340,20 @@ def fetch_arbeitnow():
     return out
 
 
+def build_direct_search_cards():
+    """Safe fallback cards for sites that do not provide stable public APIs."""
+    out = []
+    for item in DIRECT_SEARCH_SOURCES:
+        out.append({
+            **item,
+            "posted": TODAY.isoformat(),
+            "salary": None,
+            "age_label": "رابط بحث مباشر — بدون scraping",
+            "age_days": 0,
+        })
+    return out
+
+
 # ---------- Pipeline ----------
 def dedupe(cards):
     seen, out = set(), []
@@ -258,20 +369,24 @@ def dedupe(cards):
 def gather_jobs():
     jobs = []
     # ── JSearch (LinkedIn + Indeed + Glassdoor) ─────────────────────────
-    # 4 queries/day × 30 days = 120 req/month  →  within free 200/month limit
+    # 3 global + 2 rotating Gulf queries/day = ~150 requests/month on daily cron.
+    # LinkedIn is pulled through JSearch, not scraped directly.
     jobs += fetch_jsearch("flutter developer",        date_posted="week")
     jobs += fetch_jsearch("flutter developer remote", date_posted="week",  remote_only=True)
-    jobs += fetch_jsearch("flutter mobile developer", date_posted="month")
-    jobs += fetch_jsearch("senior flutter engineer",  date_posted="month")
+    jobs += fetch_jsearch("senior flutter engineer",  date_posted="week")
+    start = TODAY.toordinal() % len(GULF_JSEARCH_QUERIES)
+    gulf_queries_today = [GULF_JSEARCH_QUERIES[(start + i) % len(GULF_JSEARCH_QUERIES)] for i in range(2)]
+    for query in gulf_queries_today:
+        jobs += fetch_jsearch(query, date_posted="week", num_results=8, region_override="Gulf")
     # ── Remotive (free, no key) ──────────────────────────────────────────
     jobs += fetch_remotive("flutter")
     jobs += fetch_remotive("mobile developer")
     # ── Arbeitnow (free, EU/DE focused) ─────────────────────────────────
     jobs += fetch_arbeitnow()
     jobs = dedupe(jobs)
-    # Cap to 40 live jobs, sorted freshest first
-    jobs.sort(key=lambda c: c["posted"], reverse=True)
-    return jobs[:40]
+    # Cap to 60 live jobs, sorted Gulf first, then freshest/highest match
+    jobs.sort(key=lambda c: (c.get("region") == "Gulf", c["posted"], c["match"]), reverse=True)
+    return jobs[:60]
 
 
 # ---------- HTML build ----------
@@ -284,11 +399,13 @@ def build_plaintext_html(live_jobs):
         cards.append({
             "src": "email",
             "title": f"Flutter / Mobile Engineer Lead — {name}",
-            "company": name, "loc": loc, "region": "Email",
+            "company": name, "loc": loc,
+            "region": "Gulf" if is_gulf_location(location_text=loc) else "Email",
             "mode": mode, "posted": None, "match": match, "salary": None,
             "apply": None, "email": email,
             "age_label": "Email فقط — Cold outreach", "age_days": -1,
         })
+    cards += build_direct_search_cards()
 
     total = len(cards)
     today_n  = sum(1 for c in cards if c["age_days"] == 0)
@@ -311,6 +428,7 @@ def build_plaintext_html(live_jobs):
     --bg:#0b1020;--card:#121a33;--card2:#0e1530;--ink:#eef2ff;--mute:#9aa3c7;--line:#243159;
     --accent:#7c9cff;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;
     --jsearch:#f59e0b;--linkedin:#0a66c2;--indeed:#2557a7;--remotive:#16a34a;--arbeitnow:#e11d48;--email:#7c3aed;
+    --linkedin_search:#0a66c2;--bayt:#00a4a6;--naukrigulf:#2563eb;--gulftalent:#64748b;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Cairo",Arial,sans-serif;line-height:1.5}
@@ -329,10 +447,14 @@ def build_plaintext_html(live_jobs):
   .job .src{position:absolute;top:12px;left:12px;padding:3px 8px;font-size:11px;border-radius:999px;font-weight:700;color:#fff}
   .src.jsearch{background:var(--jsearch)}
   .src.linkedin{background:var(--linkedin)}
+  .src.linkedin_search{background:var(--linkedin_search)}
   .src.indeed{background:var(--indeed)}
   .src.remotive{background:var(--remotive)}
   .src.arbeitnow{background:var(--arbeitnow)}
   .src.email{background:var(--email)}
+  .src.bayt{background:var(--bayt)}
+  .src.naukrigulf{background:var(--naukrigulf)}
+  .src.gulftalent{background:var(--gulftalent)}
   .job h3{margin:0;font-size:15.5px;padding-left:82px;min-height:22px}
   .job .co{font-size:13px;color:var(--mute)}
   .badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
@@ -342,9 +464,14 @@ def build_plaintext_html(live_jobs):
   .badge.match.warn{background:#fef3c7;border-color:#d97706;color:#713f12}
   .salary{font-size:12.5px;color:var(--ok)}
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;margin-top:8px;cursor:pointer;border:none}
-  .btn.adzuna{background:var(--adzuna);color:#fff}
+  .btn.linkedin,.btn.linkedin_search{background:var(--linkedin);color:#fff}
+  .btn.indeed{background:var(--indeed);color:#fff}
+  .btn.jsearch{background:var(--jsearch);color:#111827}
   .btn.remotive{background:var(--remotive);color:#fff}
   .btn.arbeitnow{background:var(--arbeitnow);color:#fff}
+  .btn.bayt{background:var(--bayt);color:#fff}
+  .btn.naukrigulf{background:var(--naukrigulf);color:#fff}
+  .btn.gulftalent{background:var(--gulftalent);color:#fff}
   .btn.ghost{background:var(--card2);color:var(--ink);border:1px solid var(--line)}
   .email-block{background:var(--card2);border:1px dashed var(--line);border-radius:10px;padding:10px;margin-top:6px;font-size:12.5px}
   .email-block code{display:block;font-size:13px;color:var(--accent);direction:ltr;padding:6px 0}
@@ -357,14 +484,16 @@ def build_plaintext_html(live_jobs):
 <body>
   <header>
     <h1>🔥 Flutter / Mobile Jobs — Amr Kamal</h1>
-    <p>تحديث يومي تلقائي · Adzuna + Remotive + Arbeitnow + Email Leads · """ + TODAY.strftime("%Y-%m-%d") + r"""</p>
+    <p>تحديث يومي تلقائي · JSearch/LinkedIn + Gulf links + Remotive + Arbeitnow + Email Leads · """ + TODAY.strftime("%Y-%m-%d") + r"""</p>
   </header>
   <div class="container">
     <div class="stats">
       <span class="chip">إجمالي: <b>""" + str(total) + r"""</b></span>
       <span class="chip">النهاردة: <b>""" + str(today_n) + r"""</b></span>
       <span class="chip">آخر 48 ساعة: <b>""" + str(fresh48) + r"""</b></span>
+      <span class="chip">Gulf: <b>""" + str(sum(1 for c in cards if c.get("region") == "Gulf")) + r"""</b></span>
       <span class="chip">LinkedIn: <b>""" + str(src_counts.get("linkedin", 0)) + r"""</b></span>
+      <span class="chip">LinkedIn Search: <b>""" + str(src_counts.get("linkedin_search", 0)) + r"""</b></span>
       <span class="chip">Indeed: <b>""" + str(src_counts.get("indeed", 0)) + r"""</b></span>
       <span class="chip">JSearch: <b>""" + str(src_counts.get("jsearch", 0)) + r"""</b></span>
       <span class="chip">Remotive: <b>""" + str(src_counts.get("remotive", 0)) + r"""</b></span>
@@ -374,13 +503,13 @@ def build_plaintext_html(live_jobs):
     </div>
     <div class="controls">
       <label>Mode
-        <select id="fMode"><option value="">الكل</option><option>Remote</option><option>Hybrid</option><option>On-site</option></select>
+        <select id="fMode"><option value="">الكل</option><option>Remote</option><option>Hybrid</option><option>On-site</option><option>Search</option></select>
       </label>
       <label>Region
-        <select id="fRegion"><option value="">الكل</option><option>DE</option><option>US</option><option>GB</option><option>IN</option><option>Remote</option><option>Email</option></select>
+        <select id="fRegion"><option value="">الكل</option><option>Gulf</option><option>Remote</option><option>DE</option><option>US</option><option>GB</option><option>IN</option><option>Global</option><option>Email</option></select>
       </label>
       <label>Source
-        <select id="fSrc"><option value="">الكل</option><option>linkedin</option><option>indeed</option><option>jsearch</option><option>remotive</option><option>arbeitnow</option><option>email</option></select>
+        <select id="fSrc"><option value="">الكل</option><option>linkedin</option><option>linkedin_search</option><option>indeed</option><option>jsearch</option><option>remotive</option><option>arbeitnow</option><option>bayt</option><option>naukrigulf</option><option>gulftalent</option><option>email</option></select>
       </label>
       <label>Sort
         <select id="fSort"><option value="newest">Newest</option><option value="match">Match %</option></select>
@@ -401,11 +530,12 @@ def build_plaintext_html(live_jobs):
     const fSrc = document.getElementById("fSrc");
     const fSort = document.getElementById("fSort");
     const esc = s=>(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-    const srcLabel = s => ({linkedin:"LinkedIn",indeed:"Indeed",jsearch:"JSearch",remotive:"Remotive",arbeitnow:"Arbeitnow",email:"Email فقط"}[s]||s);
+    const srcLabel = s => ({linkedin:"LinkedIn",linkedin_search:"LinkedIn Search",indeed:"Indeed",jsearch:"JSearch",remotive:"Remotive",arbeitnow:"Arbeitnow",bayt:"Bayt",naukrigulf:"NaukriGulf",gulftalent:"GulfTalent",email:"Email فقط"}[s]||s);
     const applyBtn = j=>{
       if (!j.apply) return "";
-      const cls = ["linkedin","indeed","jsearch","remotive","arbeitnow"].includes(j.src) ? j.src : "ghost";
-      return `<a class="btn ${cls}" target="_blank" rel="noopener" href="${esc(j.apply)}">↗ Apply on ${srcLabel(j.src)}</a>`;
+      const cls = ["linkedin","linkedin_search","indeed","jsearch","remotive","arbeitnow","bayt","naukrigulf","gulftalent"].includes(j.src) ? j.src : "ghost";
+      const verb = j.mode === "Search" ? "Open" : "Apply on";
+      return `<a class="btn ${cls}" target="_blank" rel="noopener" href="${esc(j.apply)}">↗ ${verb} ${srcLabel(j.src)}</a>`;
     };
     const emailBlock = j=>{
       const subj = encodeURIComponent(`${j.title} — Amr Kamal Ali (8+ yrs Flutter, ex-KIB & Tawuniya)`);
